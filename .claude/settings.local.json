@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(pip install *)",
+      "Bash(python *)",
+      "PowerShell(python -c \"import rapidfuzz; print\\(rapidfuzz.__version__\\)\")",
+      "PowerShell(python -m pytest tests/test_normalizer.py -v 2>&1 | Select-Object -Last 20)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ]
+  }
+}

@@ -1,0 +1,46 @@
+services:
+  extractor:
+    build:
+      context: .
+      dockerfile: Dockerfile.extractor
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/db:/app/data/db
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - DB_URL=sqlite:////app/data/db/energy.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.extractor
+    command: ["python", "pipeline.py"]
+    volumes:
+      - ./data:/app/data
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - DB_URL=sqlite:////app/data/db/energy.db
+      - DATA_DIR=/app/data
+    depends_on:
+      extractor:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data/db:/app/data/db
+    environment:
+      - DB_URL=sqlite:////app/data/db/energy.db
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
