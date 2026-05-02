@@ -111,7 +111,7 @@ def _combine_datetime(d, t) -> datetime | None:
 
 class ExcelExtractor:
     def extract(self, path: Path) -> list[ExtractionResult]:
-        wb = openpyxl.load_workbook(str(path), data_only=True, read_only=True)
+        wb = openpyxl.load_workbook(str(path), data_only=True, read_only=False)
         sheet_name = next(
             (s for s in wb.sheetnames if 'bilan' in s.lower() or 'total' in s.lower()),
             wb.sheetnames[0]
