@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from extractors.base import ExtractionResult
+from normalizer import normalize_to_kwh
 
 
 _FIELD_ALIASES = {
@@ -16,6 +17,9 @@ _FIELD_ALIASES = {
 }
 
 
+_NORMALIZATION_DEFAULT_TOLERANCE = 1e-3
+
+
 @dataclass(slots=True)
 class DocumentScore:
     doc_id: str
@@ -23,6 +27,27 @@ class DocumentScore:
     exact_match: bool
     field_matches: dict[str, bool] = field(default_factory=dict)
     source_file: str | None = None
+
+
+@dataclass(slots=True)
+class NormalizationCaseResult:
+    case_id: str
+    unit: str
+    input_value: float
+    expected_kwh: float
+    actual_kwh: float
+    absolute_error: float
+    relative_error: float
+    passed: bool
+
+
+@dataclass(slots=True)
+class NormalizationAccuracyReport:
+    overall_accuracy: float
+    average_absolute_error: float
+    average_relative_error: float
+    by_unit: dict[str, dict[str, float]]
+    cases: list[NormalizationCaseResult]
 
 
 class ExtractionEvaluator:
@@ -237,3 +262,72 @@ class ExtractionEvaluator:
         if precision <= 0.0 or recall <= 0.0:
             return 0.0
         return 2 * precision * recall / (precision + recall)
+
+
+def build_normalization_accuracy_report(
+    samples: Sequence[Mapping[str, Any]],
+    tolerance: float = _NORMALIZATION_DEFAULT_TOLERANCE,
+) -> dict[str, Any]:
+    cases: list[NormalizationCaseResult] = []
+    unit_totals: dict[str, int] = {}
+    unit_passes: dict[str, int] = {}
+
+    for index, sample in enumerate(samples, start=1):
+        unit = str(sample.get("unit") or sample.get("expected_unit") or "").strip()
+        if not unit:
+            raise ValueError(f"Normalization sample {index} is missing a unit")
+        value = _coerce_sample_float(sample, ("value", "input_value", "quantity"), f"sample {index}")
+        expected = _coerce_sample_float(sample, ("expected_kwh", "reference_kwh", "expected_value"), f"sample {index}")
+        case_id = str(sample.get("case_id") or sample.get("id") or sample.get("doc_id") or index)
+        actual_kwh, _ = normalize_to_kwh(value, unit, pci=float(sample.get("pci", 9.082)), delta_hours=float(sample.get("delta_hours", 1 / 6)))
+        absolute_error = abs(actual_kwh - expected)
+        relative_error = absolute_error / abs(expected) if expected else 0.0
+        passed = absolute_error <= max(tolerance, abs(expected) * tolerance)
+
+        cases.append(
+            NormalizationCaseResult(
+                case_id=case_id,
+                unit=unit,
+                input_value=value,
+                expected_kwh=expected,
+                actual_kwh=actual_kwh,
+                absolute_error=absolute_error,
+                relative_error=relative_error,
+                passed=passed,
+            )
+        )
+
+        unit_key = unit.lower().replace('³', '3')
+        unit_totals[unit_key] = unit_totals.get(unit_key, 0) + 1
+        unit_passes[unit_key] = unit_passes.get(unit_key, 0) + int(passed)
+
+    total_cases = len(cases)
+    overall_accuracy = sum(1 for case in cases if case.passed) / total_cases if total_cases else 0.0
+    average_absolute_error = sum(case.absolute_error for case in cases) / total_cases if total_cases else 0.0
+    average_relative_error = sum(case.relative_error for case in cases) / total_cases if total_cases else 0.0
+
+    report = NormalizationAccuracyReport(
+        overall_accuracy=overall_accuracy,
+        average_absolute_error=average_absolute_error,
+        average_relative_error=average_relative_error,
+        by_unit={
+            unit: {
+                "total": float(unit_totals[unit]),
+                "passed": float(unit_passes.get(unit, 0)),
+                "accuracy": (unit_passes.get(unit, 0) / unit_totals[unit]) if unit_totals[unit] else 0.0,
+            }
+            for unit in sorted(unit_totals)
+        },
+        cases=cases,
+    )
+    return asdict(report)
+
+
+def _coerce_sample_float(sample: Mapping[str, Any], keys: Sequence[str], label: str) -> float:
+    for key in keys:
+        if key in sample and sample[key] is not None and sample[key] != "":
+            try:
+                return float(sample[key])
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{label} contains a non-numeric {key}: {sample[key]!r}") from exc
+    raise ValueError(f"{label} is missing one of: {', '.join(keys)}")

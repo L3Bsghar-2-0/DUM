@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from extractor.evaluation import ExtractionEvaluator
+from evaluation import ExtractionEvaluator
 from extractors.base import ExtractionResult
 
 

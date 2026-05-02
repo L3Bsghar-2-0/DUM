@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from extractor.test_dataset_loader import TestDatasetLoader
+from test_dataset_loader import TestDatasetLoader
 
 
 def test_test_dataset_loader_parses_manifest(tmp_path: Path):
