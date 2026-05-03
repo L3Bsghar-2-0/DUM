@@ -24,6 +24,8 @@ class EnergyRecord(Base):
     confidence_score = Column(Float, default=0.0)
     is_anomaly = Column(Boolean, default=False)
     anomaly_type = Column(String, nullable=True)
+    anomaly_confidence = Column(Float, nullable=True)
+    site = Column(String, default="Main Factory")
     co2_kg = Column(Float, nullable=True)
     extraction_warnings = Column(Text, nullable=True)
     pci_thermie_nm3 = Column(Float, default=9.082)
@@ -117,6 +119,7 @@ def update_anomaly_flags(engine, df: pd.DataFrame) -> None:
                 .values(
                     is_anomaly=bool(row.get('is_anomaly', False)),
                     anomaly_type=row.get('anomaly_type'),
+                    anomaly_confidence=row.get('anomaly_confidence'),
                 )
             )
         session.commit()

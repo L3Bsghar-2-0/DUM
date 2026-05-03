@@ -11,6 +11,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "extractor"))
 from db import read_all_records
+from forecast import generate_forecast
 
 DB_URL = os.getenv("DB_URL", "sqlite:///data/db/energy.db")
 _engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
@@ -40,8 +41,8 @@ if df.empty:
     st.warning("No data loaded yet. Run the pipeline first.")
     st.stop()
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📊 KPIs", "🌿 CO2 Trend", "🚨 Anomalies", "📋 Data Table", "🔍 Coverage"
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "📊 KPIs", "🌿 CO2 Trend", "🚨 Anomalies", "📋 Data Table", "🔍 Coverage", "📈 Forecast"
 ])
 
 # --- TAB 1: KPIs ---
@@ -134,8 +135,8 @@ with tab3:
                      color='Type')
         st.plotly_chart(fig, use_container_width=True)
 
-        cols_show = ['timestamp', 'source_file', 'anomaly_type',
-                     'puissance_brute_kw', 'gaz_debit_nm3h', 'confidence_score']
+        cols_show = ['timestamp', 'source_file', 'site', 'anomaly_type',
+                     'puissance_brute_kw', 'gaz_debit_nm3h', 'anomaly_confidence']
         cols_show = [c for c in cols_show if c in anomaly_df.columns]
         st.dataframe(
             anomaly_df[cols_show].head(200),
@@ -202,3 +203,39 @@ with tab5:
             st.dataframe(with_warnings, use_container_width=True, hide_index=True)
         else:
             st.success("No extraction warnings!")
+
+# --- TAB 6: Forecast ---
+with tab6:
+    st.subheader("24-Hour Energy Trend Forecasting")
+    st.write("Using Random Forest ML model on historical data to predict future consumption.")
+    
+    with st.spinner("Generating forecast..."):
+        try:
+            future_df = generate_forecast(df, horizon_hours=24)
+            if not future_df.empty:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    fig_pow = px.line(
+                        future_df, x='timestamp', y='pred_puissance_brute_kw',
+                        title='Predicted Power Demand (kW)',
+                        labels={'pred_puissance_brute_kw': 'Predicted kW'}
+                    )
+                    fig_pow.update_traces(line_color='orange')
+                    st.plotly_chart(fig_pow, use_container_width=True)
+                
+                with col2:
+                    if 'pred_co2_kg' in future_df.columns:
+                        fig_co2 = px.line(
+                            future_df, x='timestamp', y='pred_co2_kg',
+                            title='Predicted CO2 Emissions (kg)',
+                            labels={'pred_co2_kg': 'Predicted CO2 (kg)'}
+                        )
+                        fig_co2.update_traces(line_color='red')
+                        st.plotly_chart(fig_co2, use_container_width=True)
+                
+                st.dataframe(future_df, use_container_width=True, hide_index=True)
+            else:
+                st.warning("Not enough historical data to generate a forecast.")
+        except Exception as e:
+            st.error(f"Error generating forecast: {e}")

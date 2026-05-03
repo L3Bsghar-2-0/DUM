@@ -111,19 +111,32 @@ def _combine_datetime(d, t) -> datetime | None:
 
 class ExcelExtractor:
     def extract(self, path: Path) -> list[ExtractionResult]:
-        wb = openpyxl.load_workbook(str(path), data_only=True, read_only=False)
+        wb = openpyxl.load_workbook(str(path), data_only=True, read_only=True)
         sheet_name = next(
             (s for s in wb.sheetnames if 'bilan' in s.lower() or 'total' in s.lower()),
             wb.sheetnames[0]
         )
         ws = wb[sheet_name]
+        
+        # Load all rows into memory to prevent O(N^2) seek issues in read_only mode
+        # The file has ~70 rows max based on our mapping, but thousands of columns
+        grid = list(ws.iter_rows(max_row=80, values_only=True))
+        wb.close()
+        
+        def get_val(r_idx, c_idx):
+            # Convert 1-based to 0-based
+            r = r_idx - 1
+            c = c_idx - 1
+            if r < 0 or r >= len(grid): return None
+            if c < 0 or c >= len(grid[r]): return None
+            return grid[r][c]
 
         pci = 9.082
         cos_phi = 1.0
         warnings: list[str] = []
 
         for row_idx in range(1, 9):
-            cell_val = ws.cell(row_idx, 2).value
+            cell_val = get_val(row_idx, 2)
             if cell_val is None:
                 continue
             s = str(cell_val)
@@ -143,7 +156,7 @@ class ExcelExtractor:
         verified_map: dict[int, str] = dict(ROW_FIELD_MAP)
         label_keys = list(FRENCH_LABELS.keys())
         for row_idx, field in ROW_FIELD_MAP.items():
-            label_cell = ws.cell(row_idx, 2).value
+            label_cell = get_val(row_idx, 2)
             if label_cell is None:
                 continue
             normalized = str(label_cell).lower().strip()
@@ -156,20 +169,19 @@ class ExcelExtractor:
                         f"using hardcoded '{field}'"
                     )
 
-        max_col = ws.max_column or 1
+        max_col = len(grid[9]) if len(grid) > 9 else 1
         results: list[ExtractionResult] = []
 
         for col_idx in range(5, max_col + 1):
-            date_val = ws.cell(10, col_idx).value
-            time_val = ws.cell(11, col_idx).value
+            date_val = get_val(10, col_idx)
+            time_val = get_val(11, col_idx)
             if date_val is None:
                 continue
             ts = _combine_datetime(date_val, time_val)
 
             record_data: dict = {}
             for row_idx, field in verified_map.items():
-                cell = ws.cell(row_idx, col_idx)
-                val = _parse_float(cell.value)
+                val = _parse_float(get_val(row_idx, col_idx))
                 if val is not None:
                     record_data[field] = val
 
@@ -187,5 +199,4 @@ class ExcelExtractor:
                 **record_data,
             ))
 
-        wb.close()
         return results

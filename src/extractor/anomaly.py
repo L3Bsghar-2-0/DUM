@@ -48,7 +48,19 @@ def detect_anomalies(df: pd.DataFrame) -> pd.DataFrame:
     if len(X) > 50:
         iso = IsolationForest(contamination=0.05, random_state=42, n_jobs=-1)
         preds = iso.fit_predict(X)
+        scores = iso.decision_function(X) # < 0 is anomaly, > 0 is normal
+        
+        # Map scores to a 0-1 confidence scale (approximate mapping)
+        # Decision function: smaller (more negative) means more anomalous
+        import numpy as np
+        confidences = 0.5 - (scores / np.max(np.abs(scores) + 1e-9)) * 0.5
+        confidences = np.clip(confidences, 0, 1)
+        
         iso_mask = pd.Series(preds == -1, index=X.index).reindex(result.index, fill_value=False)
+        conf_series = pd.Series(confidences, index=X.index).reindex(result.index, fill_value=0.0)
+        
+        # Apply confidence
+        result.loc[iso_mask, 'anomaly_confidence'] = conf_series[iso_mask]
         _flag(iso_mask, 'isolation_forest')
 
     # 4. Stuck sensor: rolling std == 0 over 6 consecutive readings

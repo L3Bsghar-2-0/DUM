@@ -17,6 +17,8 @@ class ExtractionResult(BaseModel):
     confidence_score: float = 0.0
     is_anomaly: bool = False
     anomaly_type: Optional[str] = None
+    anomaly_confidence: Optional[float] = None
+    site: Optional[str] = "Main Factory"
     co2_kg: Optional[float] = None
     extraction_warnings: list[str] = []
     pci_thermie_nm3: float = 9.082

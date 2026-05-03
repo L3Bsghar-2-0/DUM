@@ -8,7 +8,7 @@ services:
     volumes:
       - ./data/db:/app/data/db
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
       - DB_URL=sqlite:////app/data/db/energy.db
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -24,7 +24,7 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
       - DB_URL=sqlite:////app/data/db/energy.db
       - DATA_DIR=/app/data
     depends_on:

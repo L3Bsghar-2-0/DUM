@@ -7,7 +7,9 @@
       "PowerShell(python -c \"import rapidfuzz; print\\(rapidfuzz.__version__\\)\")",
       "PowerShell(python -m pytest tests/test_normalizer.py -v 2>&1 | Select-Object -Last 20)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(DB_URL=\"sqlite:///:memory:\" python -c \"import main; print\\('app:', main.app.title\\); print\\('routes:'\\); [print\\(' ', r.methods if hasattr\\(r, 'methods'\\) else '', r.path\\) for r in main.app.routes]\")",
+      "Bash(git checkout *)"
     ]
   }
 }
