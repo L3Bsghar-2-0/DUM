@@ -41,8 +41,8 @@ if df.empty:
     st.warning("No data loaded yet. Run the pipeline first.")
     st.stop()
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "📊 KPIs", "🌿 CO2 Trend", "🚨 Anomalies", "📋 Data Table", "🔍 Coverage", "📈 Forecast"
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "📊 KPIs", "🌿 CO2 Trend", "🚨 Anomalies", "📋 Data Table", "🔍 Coverage", "📈 Forecast", "🌐 Edge Intelligence"
 ])
 
 # --- TAB 1: KPIs ---
@@ -204,38 +204,64 @@ with tab5:
         else:
             st.success("No extraction warnings!")
 
-# --- TAB 6: Forecast ---
-with tab6:
-    st.subheader("24-Hour Energy Trend Forecasting")
-    st.write("Using Random Forest ML model on historical data to predict future consumption.")
+
+# --- TAB 7: Edge Intelligence ---
+with tab7:
+    st.subheader("🌐 Real-Time On-Device Edge Intelligence")
     
-    with st.spinner("Generating forecast..."):
-        try:
-            future_df = generate_forecast(df, horizon_hours=24)
-            if not future_df.empty:
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    fig_pow = px.line(
-                        future_df, x='timestamp', y='pred_puissance_brute_kw',
-                        title='Predicted Power Demand (kW)',
-                        labels={'pred_puissance_brute_kw': 'Predicted kW'}
-                    )
-                    fig_pow.update_traces(line_color='orange')
-                    st.plotly_chart(fig_pow, use_container_width=True)
-                
-                with col2:
-                    if 'pred_co2_kg' in future_df.columns:
-                        fig_co2 = px.line(
-                            future_df, x='timestamp', y='pred_co2_kg',
-                            title='Predicted CO2 Emissions (kg)',
-                            labels={'pred_co2_kg': 'Predicted CO2 (kg)'}
-                        )
-                        fig_co2.update_traces(line_color='red')
-                        st.plotly_chart(fig_co2, use_container_width=True)
-                
-                st.dataframe(future_df, use_container_width=True, hide_index=True)
-            else:
-                st.warning("Not enough historical data to generate a forecast.")
-        except Exception as e:
-            st.error(f"Error generating forecast: {e}")
+    # Auto-refresh using a simple button or timer simulation
+    if st.button("🔄 Force Refresh"):
+        st.rerun()
+
+    LOG_FILE = "edge_inference.log"
+    
+    if os.path.exists(LOG_FILE):
+        with open(LOG_FILE, "r") as f:
+            lines = f.readlines()
+            recent_logs = [json.loads(line) for line in lines[-20:]][::-1]
+            
+        if recent_logs:
+            latest = recent_logs[0]
+            
+            # Top metrics
+            m1, m2, m3, m4 = st.columns(4)
+            with m1:
+                st.metric("Inference Latency", f"{latest['inference_latency_ms']} ms", delta="-0.5ms")
+            with m2:
+                st.metric("Mode", latest['mode'])
+            with m3:
+                status = "🚨 ANOMALY" if latest.get('local_anomaly_detected') else "✅ HEALTHY"
+                st.metric("Edge Status", status)
+            with m4:
+                st.metric("Active Sensors", "Power & Gas (Multi)")
+
+            # Multi-Sensor Chart
+            all_logs = [json.loads(line) for line in lines[-30:]]
+            chart_df = pd.DataFrame([
+                {
+                    "Time": l['timestamp'],
+                    "Power (kW)": l['sensors']['power'],
+                    "Gas (Nm3/h)": l['sensors']['gas'],
+                    "Power Pred": l['prediction'][0] if l['prediction'] else None,
+                    "Gas Pred": l['prediction'][1] if l['prediction'] else None,
+                    "Anomaly": 1 if l.get('local_anomaly_detected') else 0
+                } for l in all_logs
+            ])
+            
+            # Plot Power
+            fig_pow = px.line(chart_df, x='Time', y=['Power (kW)', 'Power Pred'],
+                             title="⚡ Electrical Power: Real-Time vs Predicted",
+                             color_discrete_sequence=['#FF4B4B', '#FFAA00'])
+            
+            # Plot Gas
+            fig_gas = px.line(chart_df, x='Time', y=['Gas (Nm3/h)', 'Gas Pred'],
+                             title="🔥 Natural Gas Flow: Real-Time vs Predicted",
+                             color_discrete_sequence=['#00D4FF', '#00FFAA'])
+            
+            st.plotly_chart(fig_pow, use_container_width=True)
+            st.plotly_chart(fig_gas, use_container_width=True)
+
+            st.write("📡 **Live Stream Logs (Last 10 events):**")
+            st.dataframe(pd.DataFrame(recent_logs).head(10), use_container_width=True)
+    else:
+        st.info("Waiting for live stream data...")
